@@ -171,15 +171,27 @@ AS_IF([test "$EGREP" != "$GREP -E"],
 ACX_WITH_DEPRECATED([sed], [SED])
 AC_ARG_VAR([INSTALL], [Specify the full path to GNU sed])
 AC_PROG_SED
-AC_MSG_CHECKING([whether sed understands -r -i -e])
-echo foo > .ct-ng.sed.test
-${SED} -r -i -e 's/f(o)o/b\1ar/' .ct-ng.sed.test >/dev/null 2>&1
-rc=$?
-content=`cat .ct-ng.sed.test`
-rm -f .ct-ng.sed.test
-AS_IF([test "$rc:$content" = "0:boar"],
-    [AC_MSG_RESULT([yes])],
-    [AC_MSG_ERROR([sed does not accept -r -i -e])])
+AC_CACHE_CHECK([whether $SED understands -i -e],
+    [acx_cv_sed_i_e],
+    [echo foo > .ct-ng.sed.test
+     ${SED} -i -e 's/foo/bar/' .ct-ng.sed.test >/dev/null 2>&1
+     rc=$?
+     content=`cat .ct-ng.sed.test`
+     rm -f .ct-ng.sed.test
+     AS_IF([test "$rc:$content" = "0:bar"],
+           [acx_cv_sed_i_e=yes],
+           [AC_MSG_ERROR([sed does not accept -i -e])])])
+AC_CACHE_CHECK([which $SED option selects extended regexp],
+    [acx_cv_sed_r],
+    [opt_r=`echo foo | $SED -r -e 's/f(o)o/b\1ar/' 2>/dev/null`
+     opt_E=`echo foo | $SED -E -e 's/f(o)o/b\1ar/' 2>/dev/null`
+     AS_IF([test "$opt_r" = "boar"],
+           [acx_cv_sed_r=-r],
+           [test "$opt_E" = "boar"],
+           [acx_cv_sed_r=-E],
+           [AC_MSG_ERROR([neither -r nor -E enables extended regexp])])])
+SED_R="$SED $acx_cv_sed_r"
+AC_SUBST([SED_R])
 
 AC_PROG_LN_S
 
@@ -216,13 +228,42 @@ ACX_CHECK_PROGS_REQ([bison], [bison])
 ACX_CHECK_PROGS_REQ([flex], [flex])
 ACX_CHECK_PROGS_REQ([makeinfo], [makeinfo])
 ACX_CHECK_PROGS_REQ([cut], [cut])
-ACX_CHECK_PROGS_REQ([stat], [stat])
 ACX_CHECK_PROGS_REQ([readlink], [readlink])
-ACX_CHECK_PROGS_REQ([wget], [wget])
 ACX_CHECK_PROGS_REQ([tar], [tar])
 ACX_CHECK_PROGS_REQ([gzip], [gzip])
 ACX_CHECK_PROGS_REQ([bzip2], [bzip2])
 ACX_CHECK_PROGS_REQ([help2man], [help2man])
+
+# Not a fatal failure even if we have neither - the tarballs may
+# be provided in a local directory.
+AC_CHECK_PROGS([wget], [wget])
+ACX_SET_KCONFIG_OPTION([wget])
+AC_SUBST([wget])
+
+AC_CHECK_PROGS([curl], [curl])
+ACX_SET_KCONFIG_OPTION([curl])
+AC_SUBST([curl])
+
+ACX_CHECK_PROGS_REQ([stat], [stat])
+AC_CACHE_CHECK([whether stat takes GNU or BSD format],
+    [acx_cv_stat_flavor],
+    [touch conftest
+     chmod 642 conftest
+     attr_bsd=`stat -f '%Lp' conftest 2>/dev/null`
+     attr_gnu=`stat -c '%a' conftest 2>/dev/null`
+     rm -f conftest
+     AS_IF([test "$attr_bsd" = "642"],
+       [acx_cv_stat_flavor=BSD],
+       [test "$attr_gnu" = "642"],
+       [acx_cv_stat_flavor=GNU],
+       [AC_MSG_ERROR([cannot determine stat(1) format option])])])
+
+# FIXME: support SET_KCONFIG_OPTION with string values? But then
+# again, these checks may be moved into ct-ng script.
+test "$acx_cv_stat_flavor" = "BSD" && stat_flavor_BSD=y
+ACX_SET_KCONFIG_OPTION([stat_flavor_BSD])
+test "$acx_cv_stat_flavor" = "GNU" && stat_flavor_GNU=y
+ACX_SET_KCONFIG_OPTION([stat_flavor_GNU])
 
 #--------------------------------------------------------------------
 # Still boring, but remember the path, now...

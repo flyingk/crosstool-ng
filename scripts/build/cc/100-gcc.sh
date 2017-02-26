@@ -411,10 +411,9 @@ do_gcc_core_backend() {
         fi
     done
 
-    if [ "${CT_CC_GCC_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-        extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
-        [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
-    fi
+    extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+    [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
+
     if [ "${CT_CC_CXA_ATEXIT}" = "y" ]; then
         extra_config+=("--enable-__cxa_atexit")
     else
@@ -435,14 +434,12 @@ do_gcc_core_backend() {
     else
         extra_config+=(--disable-libssp)
     fi
-    if [ "${CT_CC_GCC_HAS_LIBQUADMATH}" = "y" ]; then
-        if [ "${CT_CC_GCC_LIBQUADMATH}" = "y" ]; then
-            extra_config+=(--enable-libquadmath)
-            extra_config+=(--enable-libquadmath-support)
-        else
-            extra_config+=(--disable-libquadmath)
-            extra_config+=(--disable-libquadmath-support)
-        fi
+    if [ "${CT_CC_GCC_LIBQUADMATH}" = "y" ]; then
+        extra_config+=(--enable-libquadmath)
+        extra_config+=(--enable-libquadmath-support)
+    else
+        extra_config+=(--disable-libquadmath)
+        extra_config+=(--disable-libquadmath-support)
     fi
 
     core_LDFLAGS+=("${ldflags}")
@@ -479,13 +476,9 @@ do_gcc_core_backend() {
         core_LDFLAGS+=("-lm")
     fi
 
-    if [ "${CT_CC_GCC_USE_GMP_MPFR}" = "y" ]; then
-        extra_config+=("--with-gmp=${complibs}")
-        extra_config+=("--with-mpfr=${complibs}")
-    fi
-    if [ "${CT_CC_GCC_USE_MPC}" = "y" ]; then
-        extra_config+=("--with-mpc=${complibs}")
-    fi
+    extra_config+=("--with-gmp=${complibs}")
+    extra_config+=("--with-mpfr=${complibs}")
+    extra_config+=("--with-mpc=${complibs}")
     if [ "${CT_CC_GCC_USE_GRAPHITE}" = "y" ]; then
         if [ "${CT_ISL}" = "y" ]; then
             extra_config+=("--with-isl=${complibs}")
@@ -493,13 +486,13 @@ do_gcc_core_backend() {
         if [ "${CT_CLOOG}" = "y" ]; then
             extra_config+=("--with-cloog=${complibs}")
         fi
-    elif [ "${CT_CC_GCC_HAS_GRAPHITE}" = "y" ]; then
+    else
         extra_config+=("--with-isl=no")
         extra_config+=("--with-cloog=no")
     fi
     if [ "${CT_CC_GCC_USE_LTO}" = "y" ]; then
         extra_config+=("--enable-lto")
-    elif [ "${CT_CC_GCC_HAS_LTO}" = "y" ]; then
+    else
         extra_config+=("--disable-lto")
     fi
 
@@ -561,6 +554,12 @@ do_gcc_core_backend() {
     if [ "${CT_CC_GCC_SYSTEM_ZLIB}" = "y" ]; then
         extra_config+=("--with-system-zlib")
     fi
+
+    case "${CT_CC_GCC_CONFIG_TLS}" in
+        y)  extra_config+=("--enable-tls");;
+        m)  ;;
+        "") extra_config+=("--disable-tls");;
+    esac
 
     # Some versions of gcc have a defective --enable-multilib.
     # Since that's the default, only pass --disable-multilib. For multilib,
@@ -661,7 +660,7 @@ do_gcc_core_backend() {
 
         CT_DoExecLog ALL make ${JOBSFLAGS} -C gcc ${libgcc_rule} \
                               ${repair_cc}
-        sed -r -i -e 's@-lc@@g' gcc/${libgcc_rule}
+        sed_r -i -e 's@-lc@@g' gcc/${libgcc_rule}
     else # build_libgcc
         core_targets=( gcc )
     fi   # ! build libgcc
@@ -893,10 +892,9 @@ do_gcc_backend() {
     done
 
     [ "${CT_SHARED_LIBS}" = "y" ] || extra_config+=("--disable-shared")
-    if [ "${CT_CC_GCC_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-        extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
-        [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
-    fi
+    extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+    [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
+
     case "${CT_CC_GCC_SJLJ_EXCEPTIONS}" in
         y)  extra_config+=("--enable-sjlj-exceptions");;
         m)  ;;
@@ -930,22 +928,18 @@ do_gcc_backend() {
     else
         extra_config+=(--disable-libssp)
     fi
-    if [ "${CT_CC_GCC_HAS_LIBQUADMATH}" = "y" ]; then
-        if [ "${CT_CC_GCC_LIBQUADMATH}" = "y" ]; then
-            extra_config+=(--enable-libquadmath)
-            extra_config+=(--enable-libquadmath-support)
-        else
-            extra_config+=(--disable-libquadmath)
-            extra_config+=(--disable-libquadmath-support)
-        fi
+    if [ "${CT_CC_GCC_LIBQUADMATH}" = "y" ]; then
+        extra_config+=(--enable-libquadmath)
+        extra_config+=(--enable-libquadmath-support)
+    else
+        extra_config+=(--disable-libquadmath)
+        extra_config+=(--disable-libquadmath-support)
     fi
 
-    if [ "${CT_CC_GCC_HAS_LIBSANITIZER}" = "y" ]; then
-        if [ "${CT_CC_GCC_LIBSANITIZER}" = "y" ]; then
-            extra_config+=(--enable-libsanitizer)
-        else
-            extra_config+=(--disable-libsanitizer)
-        fi
+    if [ "${CT_CC_GCC_LIBSANITIZER}" = "y" ]; then
+        extra_config+=(--enable-libsanitizer)
+    else
+        extra_config+=(--disable-libsanitizer)
     fi
 
     if [ "${CT_CC_GCC_HAS_LIBMPX}" = "y" ]; then
@@ -990,13 +984,9 @@ do_gcc_backend() {
         final_LDFLAGS+=("-lm")
     fi
 
-    if [ "${CT_CC_GCC_USE_GMP_MPFR}" = "y" ]; then
-        extra_config+=("--with-gmp=${complibs}")
-        extra_config+=("--with-mpfr=${complibs}")
-    fi
-    if [ "${CT_CC_GCC_USE_MPC}" = "y" ]; then
-        extra_config+=("--with-mpc=${complibs}")
-    fi
+    extra_config+=("--with-gmp=${complibs}")
+    extra_config+=("--with-mpfr=${complibs}")
+    extra_config+=("--with-mpc=${complibs}")
     if [ "${CT_CC_GCC_USE_GRAPHITE}" = "y" ]; then
         if [ "${CT_ISL}" = "y" ]; then
             extra_config+=("--with-isl=${complibs}")
@@ -1004,13 +994,13 @@ do_gcc_backend() {
         if [ "${CT_CLOOG}" = "y" ]; then
             extra_config+=("--with-cloog=${complibs}")
         fi
-    elif [ "${CT_CC_GCC_HAS_GRAPHITE}" = "y" ]; then
+    else
         extra_config+=("--with-isl=no")
         extra_config+=("--with-cloog=no")
     fi
     if [ "${CT_CC_GCC_USE_LTO}" = "y" ]; then
         extra_config+=("--enable-lto")
-    elif [ "${CT_CC_GCC_HAS_LTO}" = "y" ]; then
+    else
         extra_config+=("--disable-lto")
     fi
 
@@ -1058,6 +1048,8 @@ do_gcc_backend() {
 
     if [ "${CT_CC_GCC_ENABLE_PLUGINS}" = "y" ]; then
         extra_config+=( --enable-plugin )
+    else
+        extra_config+=( --disable-plugin )
     fi
     if [ "${CT_CC_GCC_GOLD}" = "y" ]; then
         extra_config+=( --enable-gold )
@@ -1090,6 +1082,12 @@ do_gcc_backend() {
     if [ "${CT_CC_GCC_SYSTEM_ZLIB}" = "y" ]; then
         extra_config+=("--with-system-zlib")
     fi
+
+    case "${CT_CC_GCC_CONFIG_TLS}" in
+        y)  extra_config+=("--enable-tls");;
+        m)  ;;
+        "") extra_config+=("--disable-tls");;
+    esac
 
     # Some versions of gcc have a defective --enable-multilib.
     # Since that's the default, only pass --disable-multilib.

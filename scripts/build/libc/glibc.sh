@@ -5,6 +5,9 @@
 do_libc_get() {
     local date
     local version
+    local -a addons_list
+
+    addons_list=($(do_libc_add_ons_list " "))
 
     # Main source
     if [ "${CT_LIBC_GLIBC_CUSTOM}" = "y" ]; then
@@ -23,15 +26,76 @@ do_libc_get() {
 	esac
     fi
 
+    # C library addons
+    for addon in "${addons_list[@]}"; do
+        # Never ever try to download these add-ons,
+        # they've always been internal
+        case "${addon}" in
+            nptl)   continue;;
+        esac
+
+        case "${addon}:${CT_LIBC_GLIBC_PORTS_EXTERNAL}" in
+            ports:y)    ;;
+            ports:*)    continue;;
+        esac
+
+        if ! CT_GetFile "glibc-${addon}-${CT_LIBC_VERSION}"                      \
+               http://mirrors.kernel.org/sourceware/glibc                        \
+               {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+               ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
+        then
+            # Some add-ons are bundled with glibc, others are
+            # bundled in their own tarball. Eg. NPTL is internal,
+            # while LinuxThreads was external. Also, for old
+            # versions of glibc, the libidn add-on was external,
+            # but with version >=2.10, it is internal.
+            CT_DoLog DEBUG "Addon '${addon}' could not be downloaded."
+            CT_DoLog DEBUG "We'll see later if we can find it in the source tree"
+        fi
+    done
+
     return 0
 }
 
 do_libc_extract() {
+    local addon
+
     CT_Extract "${CT_LIBC}-${CT_LIBC_VERSION}"
     CT_Pushd "${CT_SRC_DIR}/${CT_LIBC}-${CT_LIBC_VERSION}"
     # Custom glibc won't get patched, because CT_GetCustom
     # marks custom glibc as patched.
     CT_Patch nochdir "${CT_LIBC}" "${CT_LIBC_VERSION}"
+
+    for addon in $(do_libc_add_ons_list " "); do
+        # If the addon was bundled with the main archive, we do not
+        # need to extract it. Worse, if we were to try to extract
+        # it, we'd get an error.
+        if [ -d "${addon}" ]; then
+            CT_DoLog DEBUG "Add-on '${addon}' already present, skipping extraction"
+            continue
+        fi
+
+        CT_Extract nochdir "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+
+        CT_TestAndAbort "Error in add-on '${addon}': both short and long names in tarball" \
+            -d "${addon}" -a -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+
+        # Some addons have the 'long' name, while others have the
+        # 'short' name, but patches are non-uniformly built with
+        # either the 'long' or 'short' name, whatever the addons name
+        # but we prefer the 'short' name and avoid duplicates.
+        if [ -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" ]; then
+            CT_DoExecLog FILE mv "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" "${addon}"
+        fi
+
+        CT_DoExecLog FILE ln -s "${addon}" "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+
+        CT_Patch nochdir "${CT_LIBC}" "${addon}-${CT_LIBC_VERSION}"
+
+        # Remove the long name since it can confuse configure scripts to run
+        # the same source twice.
+        rm "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+    done
 
     # The configure files may be older than the configure.in files
     # if using a snapshot (or even some tarballs). Fake them being
@@ -409,7 +473,7 @@ do_libc_backend_once() {
 do_libc_add_ons_list() {
     local sep="$1"
     local addons_list="$( echo "${CT_LIBC_ADDONS_LIST}"            \
-                          |sed -r -e "s/[[:space:],]/${sep}/g;" \
+                          |sed_r -e "s/[[:space:],]/${sep}/g;" \
                         )"
     if [ "${CT_LIBC_GLIBC_2_20_or_later}" != "y" ]; then
         case "${CT_THREADS}" in
@@ -419,7 +483,7 @@ do_libc_add_ons_list() {
     fi
     [ "${CT_LIBC_GLIBC_USE_PORTS}" = "y" ] && addons_list="${addons_list}${sep}ports"
     # Remove duplicate, leading and trailing separators
-    echo "${addons_list}" |sed -r -e "s/${sep}+/${sep}/g; s/^${sep}//; s/${sep}\$//;"
+    echo "${addons_list}" |sed_r -e "s/${sep}+/${sep}/g; s/^${sep}//; s/${sep}\$//;"
 }
 
 # Compute up the minimum supported Linux kernel version
@@ -448,7 +512,7 @@ do_libc_min_kernel_config() {
             elif [ "${CT_LIBC_GLIBC_KERNEL_VERSION_CHOSEN}" = "y" ]; then
                 # Trim the fourth part of the linux version, keeping only the first three numbers
                 min_kernel_config="$( echo "${CT_LIBC_GLIBC_MIN_KERNEL_VERSION}"               \
-                                      |sed -r -e 's/^([^.]+\.[^.]+\.[^.]+)(|\.[^.]+)$/\1/;' \
+                                      |sed_r -e 's/^([^.]+\.[^.]+\.[^.]+)(|\.[^.]+)$/\1/;' \
                                     )"
             fi
             echo "--enable-kernel=${min_kernel_config}"

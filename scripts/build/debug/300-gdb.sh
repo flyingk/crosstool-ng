@@ -1,7 +1,5 @@
 # Build script for the gdb debug facility
 
-if [ "${CT_GDB_CROSS}" = y -o "${CT_GDB_GDBSERVER}" = "y" -o "${CT_GDB_NATIVE}" = "y" ]; then
-
 do_debug_gdb_get() {
     local linaro_version=""
     local linaro_series=""
@@ -158,11 +156,11 @@ do_debug_gdb_build() {
             if [ -f "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/BASE-VER" ]; then
                 gcc_version=$( cat "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/BASE-VER" )
             else
-                gcc_version=$(sed -r -e '/version_string/!d; s/^.+= "([^"]+)".*$/\1/;'   \
+                gcc_version=$(sed_r -e '/version_string/!d; s/^.+= "([^"]+)".*$/\1/;'   \
                                    "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/version.c"   \
                              )
             fi
-            sed -r                                               \
+            sed_r                                                   \
                    -e "s:@@PREFIX@@:${CT_PREFIX_DIR}:;"             \
                    -e "s:@@VERSION@@:${gcc_version}:;"              \
                    "${CT_LIB_DIR}/scripts/build/debug/gdbinit.in"   \
@@ -178,6 +176,9 @@ do_debug_gdb_build() {
         CT_DoStep INFO "Installing native gdb"
 
         native_extra_config=("${extra_config[@]}")
+
+        # We may not have C++ language configured for target
+        native_extra_config+=("--disable-build-with-cxx")
 
         # GDB on Mingw depends on PDcurses, not ncurses
         if [ "${CT_MINGW32}" != "y" ]; then
@@ -293,6 +294,9 @@ do_debug_gdb_build() {
 
         gdbserver_extra_config=("${extra_config[@]}")
 
+        # We may not have C++ language configured for target
+        gdbserver_extra_config+=("--disable-build-with-cxx")
+
         if [ "${CT_GDB_GDBSERVER_HAS_IPA_LIB}" = "y" ]; then
             if [ "${CT_GDB_GDBSERVER_BUILD_IPA_LIB}" = "y" ]; then
                 gdbserver_extra_config+=( --enable-inprocess-agent )
@@ -340,5 +344,3 @@ do_debug_gdb_build() {
         CT_EndStep
     fi
 }
-
-fi
